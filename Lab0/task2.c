@@ -1,4 +1,4 @@
-/*task3.c*/
+/* main.c task2*/
 #include <pthread.h>
 #include <math.h>
 #include <stdlib.h>
