@@ -22,9 +22,16 @@ What would/could happen if all threads output their share of elements in paralle
 without further synchronization?
 the output will be out of order
 • Measure the execution time of step 3 for different values of p with fixed n.
+when p is 1 is 0.246012 
+with 4 p is 0.062071 
+with 8 p is 0.041341
+
+
 • Compare the step-3 time of the multithreaded program (Task 2) with p = 1 threads
 (i.e., no further threads created) with the corresponding time of step 3 of the sequential
 program (Task 1).
 • In general, parallel speedup over the sequential version by using more than one core
 could only be observed for very large n (better suppress outputting all elements then).
 Why is that?
+in smallers gorups the time creating the threads take the most of the time, with a bigger groups is more easy to see
+

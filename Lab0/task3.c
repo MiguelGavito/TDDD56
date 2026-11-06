@@ -1,17 +1,13 @@
 /*task3.c*/
 #include <pthread.h>
-#include <math.h>
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
 
-#define NUM_THREADS 8 // threads 
+#define NUM_THREADS 10 // threads 
 #define SIZE 100000000
 
 float *A; // Array init
-
-
-
 
 // This function computes a time span (double value)
 // from two struct timespec pointers
@@ -31,37 +27,30 @@ double timediff(struct timespec *begin, struct timespec *end)
    return sec + nsec / 1E9;
 }
 
-
-
-void *foo(void *arg){
-  printf("Creating new pthread\n");
-  return NULL;
-}
-
 typedef struct{
   int start;
   int end;
-  int id;
   double elapsed;
-  float sum;
+  double sum ;
 } ThreadData;
 
 void *calculate(void* arg){
-  ThreadData *data;
-  data = (ThreadData*)arg;
+  ThreadData *data = (ThreadData*)arg;
   
-  struct timespec time1, time2;
+  double local_sum = 0.0;
 
+  struct timespec time1, time2;
   clock_gettime(CLOCK_MONOTONIC,&time1);
 
+
   for (int i = data->start; i < data->end; i++){
-    A[i] = i*i+1;
-    data->sum+= A[i];
-    // printf("A[%d]:\t%f\n",i,A[i]);
+        A[i] = (float)i * (float)i + 1.0f;
+        local_sum += A[i];  
   }
 
   clock_gettime(CLOCK_MONOTONIC,&time2);
 
+  data->sum = local_sum;
   data->elapsed = timediff(&time1,&time2);
 
   return NULL;
@@ -73,7 +62,7 @@ int main(int argc, char *argv[])
 
   // int *address_i;
   
-  clockid_t clk = CLOCK_REALTIME;
+  clockid_t clk = CLOCK_MONOTONIC;
 
   struct timespec time1, time2;
 
@@ -120,6 +109,7 @@ int main(int argc, char *argv[])
   for (int i = 0; i < NUM_THREADS; i++){
     
     pthread_join(threads[i],NULL);
+    
     sum += data[i].sum;
   }
 
