@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <malloc.h>
+// #include <malloc.h>
+#include <stdlib.h>
 
 #include "mandelbrot.h"
 #include "ppm.h"
@@ -119,8 +120,11 @@ compute_chunk(struct mandelbrot_param *args)
 	}
 }
 
+
 /***** You may modify this portion *****/
+
 #if NB_THREADS > 0
+
 void
 init_round(struct mandelbrot_thread *args)
 {
