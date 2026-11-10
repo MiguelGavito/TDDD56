@@ -49,7 +49,7 @@ void compute_mandelbrot(struct mandelbrot_param);
 #endif
 
 void init_mandelbrot(struct mandelbrot_param*);
-void destroy_mandelbrot();
+void destroy_mandelbrot(struct mandelbrot_param);
 
 void init_ppm(struct mandelbrot_param*);
 void update_colors(struct mandelbrot_param*);
