@@ -138,11 +138,11 @@ parallel_mandelbrot(struct mandelbrot_thread *args, struct mandelbrot_param *par
 {
 // Compiled only if LOADBALANCE = 0
 #if LOADBALANCE == 0
-	int size = parameters->width / NB_THREADS;
-	parameters->begin_h = 0;
-	parameters->end_h = parameters->height;
-	parameters->begin_w = args->id * size;
-	parameters->end_w = (args->id + 1)* size;
+	int size = parameters->height / NB_THREADS;
+	parameters->begin_h = args->id * size;
+	parameters->end_h = (args->id + 1) * size;
+	parameters->begin_w = 0;
+	parameters->end_w = args->width;
 
 		// Go
 	compute_chunk(parameters);

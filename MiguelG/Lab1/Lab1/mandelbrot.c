@@ -121,11 +121,15 @@ compute_chunk(struct mandelbrot_param *args)
 
 /***** You may modify this portion *****/
 #if NB_THREADS > 0
+pthread_mutex_t mutex;
+int i = 0;
 void
 init_round(struct mandelbrot_thread *args)
 {
 	// Initialize or reinitialize here variables before any thread starts or restarts computation
 	// Every thread run this function; feel free to allow only one of them to do anything
+	pthread_mutex_init(&mutex, NULL);
+	i = 0;
 }
 
 /*
@@ -136,39 +140,35 @@ parallel_mandelbrot(struct mandelbrot_thread *args, struct mandelbrot_param *par
 {
 // Compiled only if LOADBALANCE = 0
 #if LOADBALANCE == 0
-	// Replace this code with a naive *parallel* implementation.
-	// Only thread of ID 0 compute the whole picture
-	if(args->id == 0)
-	{
-		// Define the region compute_chunk() has to compute
-		// Entire height: from 0 to picture's height
-		parameters->begin_h = 0;
-		parameters->end_h = parameters->height;
-		// Entire width: from 0 to picture's width
-		parameters->begin_w = 0;
-		parameters->end_w = parameters->width;
+	int size = parameters->height / NB_THREADS;
+	parameters->begin_h = args->id * size;
+	parameters->end_h = (args->id + 1) * size;
+	parameters->begin_w = 0;
+	parameters->end_w = parameters->width;
 
 		// Go
-		compute_chunk(parameters);
-	}
+	compute_chunk(parameters);
 #endif
 // Compiled only if LOADBALANCE = 1
 #if LOADBALANCE == 1
-	// Replace this code with your load-balanced smarter solution.
-	// Only thread of ID 0 compute the whole picture
-	if(args->id == 0)
+	int index;
+	while (1)
 	{
-		// Define the region compute_chunk() has to compute
-		// Entire height: from 0 to picture's height
-		parameters->begin_h = 0;
-		parameters->end_h = parameters->height;
-		// Entire width: from 0 to picture's width
+		pthread_mutex_lock(&mutex);
+		index = i;
+		i++;
+		pthread_mutex_unlock(&mutex);
+
+		if (index >= parameters->height)
+			break;
+
+		parameters->begin_h = index;
+		parameters->end_h = index+1;
 		parameters->begin_w = 0;
 		parameters->end_w = parameters->width;
-
-		// Go
 		compute_chunk(parameters);
 	}
+
 #endif
 // Compiled only if LOADBALANCE = 2
 #if LOADBALANCE == 2
