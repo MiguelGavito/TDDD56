@@ -77,7 +77,7 @@ void swap(int *a, int *b) {
     *b = temp;
 }
 
-void buildMaxHeap(int arr[], int left, int n) {
+void buildMaxHeap(int *arr, int left, int n) {
     for (int i = 1; i < n; i++) {
         if (arr[left + i] > arr[left + (i - 1) / 2]) {
             int j = i;
@@ -89,7 +89,7 @@ void buildMaxHeap(int arr[], int left, int n) {
     }
 }
 
-void heapSort(int arr[], int left, int right) {
+void heapSort(int *arr, int left, int right) {
     int n = right - left + 1;
     if (n <= 1) return;
     buildMaxHeap(arr, left, n);
@@ -108,12 +108,35 @@ void heapSort(int arr[], int left, int right) {
     }
 }
 
+void merge(int *arr, int left, int right) {
+    int merged[right - left + 1];
+    int m = (left + right) / 2;
+    int i = left, j = m + 1, k = 0;
+    while (i <= m && j <= right) {
+        if (arr[i] <= arr[j]) merged[k] = arr[i++];
+        else merged[k] = arr[j++];
+        k++;
+    }
+    while (i <= m) merged[k++] = arr[i++];
+    while (j <= right) merged[k++] = arr[j++];
+    for (int p = 0; p < right - left + 1; p++) arr[p + left] = merged[p];
+}
+
+#if NB_THREADS > 0
+pthread_barrier_t *barrier;
+pthread_barrier_init(barrier, NULL, NB_THREADS)
 void* simple_parallel_merge_sort(void * buffer)
 {
 	struct mergesort_thread *args = (struct mergesort_thread*) buffer;
-    /*
-    * Add your code here
-    */
+    int sub_size = args->array_size / NB_THREADS;
+    int left = args->id * sub_size;
+    int right = left + sub_size;
+    if (args->array_size % NB_THREADS != 0 && args->id == NB_THREADS - 1) right = args->array_size - 1;
+    // Heap sorting of subarray
+    heapSort(arr, left, right)
+    // Wait for all subarrays to be sorted
+    pthread_barrier_wait(barrier);
+    // Merging subarrays
 
 }
 void* fully_parallel_merge_sort(void * buffer)
@@ -123,6 +146,7 @@ void* fully_parallel_merge_sort(void * buffer)
     * Add your code here
     */
 }
+#endif
 
 void parallel_sort(int *array, int left, int right)
 {
