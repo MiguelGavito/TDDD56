@@ -78,7 +78,9 @@ int main(int argc, char **argv)
     for (int i = 0; i < size; i++)
     {
         array[i] = rand() % (10 * size);
+        //printf("%d\n",array[i]);
     }
+    printf("\ndivision\n");
 #ifdef MEASURE
     struct mergesort_timing global;
     clock_gettime(CLOCK_MONOTONIC, &global.start);
@@ -93,9 +95,7 @@ int main(int argc, char **argv)
         temp[i] = array[i];
     }
     sequential_merge_sort(temp, 0, size - 1);
-    for (int i = 0; i < size; i++) {
-        printf("%d\n", array[i]);
-    }
+
     
     for (int i = 0; i < size; i++)
     {

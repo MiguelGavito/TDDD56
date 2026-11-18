@@ -103,24 +103,45 @@ void* simple_parallel_merge_sort(void * buffer)
 	struct mergesort_thread *args = (struct mergesort_thread*) buffer;
     int sub_size = args->array_size / NB_THREADS;
     int left = args->id * sub_size;
-    int right = left + sub_size;
+    int right = left + sub_size - 1;
+
+
+
     // Take the last elements of the arrays in the last thread if array size is not divisible by nb of threads
     if (args->array_size % NB_THREADS != 0 && args->id == NB_THREADS - 1) right = args->array_size - 1;
+
+
+
     // Sequential merge sorting of subarray
     sequential_merge_sort(args->array, left, right);
+
+    
+
     // Wait for all subarrays to be sorted
+    //printf("thread %d waiting at barrier\n", args->id);
     pthread_barrier_wait(&barrier);
+
+
     // Merging subarrays
     int k = 2;
-    while(sub_size != args->array_size){
+    while(sub_size < args->array_size){
+        //printf("thread %d\n", args->id);
+
         if (args->id % k == 0){
-            merge(args->array,left,right*2);
+            //printf("merging\n");
+            //ze last = sub size + array size % nb threads
+            merge(args->array,left,left + (right-left)*2+1);
             sub_size = sub_size*2;
             k = k*2;
-            right = right*2;
+            right = left + (right-left)*2+1;
+            
+            //printf("loool\n");
         }else{
             sub_size = sub_size*2;
         }
+        
+
+        
         pthread_barrier_wait(&barrier);
     }
 
