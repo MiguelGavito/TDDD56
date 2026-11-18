@@ -1,1 +1,4 @@
 make clean && make LDFLAGS="-framework OpenGL -framework GLUT -lpthread -lm"
+
+
+make clean && make NB_THREADS=2 LOADBALANCE=2 LDFLAGS="-framework OpenGL -framework GLUT -lpthread -lm"

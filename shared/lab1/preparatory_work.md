@@ -8,4 +8,6 @@ It depends if the computation converges, or at least doesn't diverge enough befo
 If the pixels are evenly distributed regardless of their load between the threads, some threads may have more longer computations time pixels to process (for instance, a lot of black pixels) than others, leading to uneven computation time between threads. The total computation time is then the computation time of the longer thread, while other threads are idle.
 
 * **Wich load balancing method to use?**\
-To be discussed.
+dynamic work: give work for the free threads, index offer works and threads ask for it and take it.
+
+

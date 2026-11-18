@@ -25,7 +25,7 @@ LDFLAGS=-lrt -lGL -lGLU -lglut -lpthread -lm
 all: mandelbrot-$(MAXITER)-$(WIDTH)-$(HEIGHT)-$(LOWER_R)-$(UPPER_R)-$(LOWER_I)-$(UPPER_I)-$(NB_THREADS)-$(LOADBALANCE)
 
 clean:
-	$(RM) mandelbrot-*
+	$(RM) -r mandelbrot-*
 	$(RM) mandelbrot
 	$(RM) *.o
 
