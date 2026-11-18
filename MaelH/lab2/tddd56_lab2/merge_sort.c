@@ -77,36 +77,7 @@ void swap(int *a, int *b) {
     *b = temp;
 }
 
-void buildMaxHeap(int *arr, int left, int n) {
-    for (int i = 1; i < n; i++) {
-        if (arr[left + i] > arr[left + (i - 1) / 2]) {
-            int j = i;
-            while (j > 0 && arr[left + j] > arr[left + (j - 1) / 2]) {
-                swap(&arr[left + j], &arr[left + (j - 1) / 2]);
-                j = (j - 1) / 2;
-            }
-        }
-    }
-}
 
-void heapSort(int *arr, int left, int right) {
-    int n = right - left + 1;
-    if (n <= 1) return;
-    buildMaxHeap(arr, left, n);
-    for (int i = n - 1; i > 0; i--) {
-        swap(&arr[left], &arr[left + i]);
-        int j = 0;
-        int index;
-        do {
-            index = 2 * j + 1;
-            if (index < i - 1 && arr[left + index] < arr[left + index + 1]) index++;
-            if (index < i && arr[left + j] < arr[left + index]) {
-                swap(&arr[left + j], &arr[left + index]);
-            }
-            j = index;
-        } while (index < i);
-    }
-}
 
 void merge(int *arr, int left, int right) {
     int merged[right - left + 1];
@@ -123,20 +94,37 @@ void merge(int *arr, int left, int right) {
 }
 
 #if NB_THREADS > 0
-pthread_barrier_t *barrier;
-pthread_barrier_init(barrier, NULL, NB_THREADS)
+
+pthread_barrier_t barrier;
+
+
 void* simple_parallel_merge_sort(void * buffer)
 {
 	struct mergesort_thread *args = (struct mergesort_thread*) buffer;
     int sub_size = args->array_size / NB_THREADS;
     int left = args->id * sub_size;
     int right = left + sub_size;
+    // Take the last elements of the arrays in the last thread if array size is not divisible by nb of threads
     if (args->array_size % NB_THREADS != 0 && args->id == NB_THREADS - 1) right = args->array_size - 1;
-    // Heap sorting of subarray
-    heapSort(arr, left, right)
+    // Sequential merge sorting of subarray
+    sequential_merge_sort(args->array, left, right);
     // Wait for all subarrays to be sorted
-    pthread_barrier_wait(barrier);
+    pthread_barrier_wait(&barrier);
     // Merging subarrays
+    int k = 2;
+    while(sub_size != args->array_size){
+        if (args->id % k == 0){
+            merge(args->array,left,right*2);
+            sub_size = sub_size*2;
+            k = k*2;
+            right = right*2;
+        }else{
+            sub_size = sub_size*2;
+        }
+        pthread_barrier_wait(&barrier);
+    }
+
+
 
 }
 void* fully_parallel_merge_sort(void * buffer)
@@ -157,6 +145,9 @@ void parallel_sort(int *array, int left, int right)
     // Initialize attributes
     pthread_attr_init(&thread_attr);
     pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
+
+
+    pthread_barrier_init(&barrier, NULL, NB_THREADS);
 
     // Create a thread pool
     for (i = 0; i < NB_THREADS; i++)
