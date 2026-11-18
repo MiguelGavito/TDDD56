@@ -77,8 +77,6 @@ void swap(int *a, int *b) {
     *b = temp;
 }
 
-
-
 void merge(int *arr, int left, int right) {
     int merged[right - left + 1];
     int m = (left + right) / 2;
@@ -101,9 +99,9 @@ pthread_barrier_t barrier;
 void* simple_parallel_merge_sort(void * buffer)
 {
 	struct mergesort_thread *args = (struct mergesort_thread*) buffer;
-    int sub_size = args->array_size / NB_THREADS;
-    int left = args->id * sub_size;
-    int right = left + sub_size - 1;
+    long int sub_size = args->array_size / NB_THREADS;
+    long int left = args->id * sub_size;
+    long int right = left + sub_size - 1;
 
 
 
@@ -130,10 +128,10 @@ void* simple_parallel_merge_sort(void * buffer)
         if (args->id % k == 0){
             //printf("merging\n");
             //ze last = sub size + array size % nb threads
-            merge(args->array,left,left + (right-left)*2+1);
+            merge(args->array,left,left + (sub_size)*2-1);
             sub_size = sub_size*2;
             k = k*2;
-            right = left + (right-left)*2+1;
+            right = left + (sub_size)*2-1;
             
             //printf("loool\n");
         }else{
