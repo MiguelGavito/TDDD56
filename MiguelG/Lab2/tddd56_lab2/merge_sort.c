@@ -96,11 +96,16 @@ void merge(int *array, int left, int mid, int right){
 
 }
 
+
+#if NB_THREADS > 0
 int partition_start(int partition, int array_size){
+
+
     int base = array_size / NB_THREADS;
     int remainder = array_size % NB_THREADS;
 
     return partition * base + (partition < remainder ? partition : remainder);
+
 }
 
 void* simple_parallel_merge_sort(void * buffer)
@@ -147,14 +152,90 @@ void* simple_parallel_merge_sort(void * buffer)
     }
 
 }
+int compute_rank(int array[],int target, int low, int high){
+    // Repeat until the pointers low and high meet each other
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+
+        if (x == array[mid])
+            return mid;
+
+        if (x > array[mid])
+            low = mid + 1;
+
+        else
+            high = mid - 1;
+    }
+
+    return mid;
+}
+
 void* fully_parallel_merge_sort(void * buffer)
 {
     struct mergesort_thread *args = (struct mergesort_thread*) buffer;
-    /*
-    * Add your code here
-    */
-}
+    // Get base and remainder
+    int base = args->array_size / NB_THREADS;
+    int remainder = args->array_size % NB_THREADS;
 
+    
+    int left = args->id * base;
+    // if id is lower than remainder we add id to left idx
+    // else we add remainder
+    // this account that we at the start have bigger sub sizes and are increment the place in the start, id 0 start at 0 but id 1 start at id * base +1 and id 2 at id * base +2, and after the id is equal or bigger than the remainder that mean we dont have more remainders and we only do left + remainder
+    left += (args->id < remainder) ? args->id : remainder;
+
+    // local size just check if the id is smaller than remainder, if it, then add 1
+    int local_size = base + (args->id < remainder);
+    int right = left + local_size - 1;
+
+    // define a method in order to do id 0 check area id 1 and vice versa, and then expand
+    int mid_partition = args->id + k / 2;
+    int end_partition = args->id + k;
+
+    int left = partition_start(args->id,args->array_size);
+    int mid = partition_start(mid_partition, args->array_size)-1;
+    int right = partition_start(end_partition, args->array_size)-1;
+
+    int temp[] // array termporal for save
+    
+    sequential_merge_sort(args->array, left, right);
+
+
+    pthread_barrier_wait(&thread_pool_barrier);
+
+    for (int k = 2; k <= NB_THREADS; k*=2){
+        int rank_a_in_b[n1];
+        int rank_b_in_a[n2];
+        // if even work with array a 
+        if (args->id % 2 == 0){
+            for (int i = 0; i < n1; i++){
+                rank_a_in_b[i] = compute_rank(args->array,args->array[i],left,mid);
+            }
+        }
+        else{
+            for (int j = 0; j < n2; j++){
+                rank_b_in_a[j] = compute_rank(args->array,args->array[j+mid],mid,right);
+            }
+        }
+        // if odd work with array b
+
+        pthread_barrier_wait(&thread_pool_barrier);
+
+        if (args->id % 2 == 0){
+            for (int i = 0; i < n1; i++){
+
+            }
+        }
+        else{
+            for (int j = 0; j < n2; j++){
+
+            }
+        }
+        pthread_barrier_wait(&thread_pool_barrier);
+    }
+ 
+}
+#endif
 void parallel_sort(int *array, int left, int right)
 {
 #if NB_THREADS > 0
