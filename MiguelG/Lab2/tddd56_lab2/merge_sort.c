@@ -74,13 +74,17 @@ void merge(int *array, int left, int mid, int right){
     int j = mid+1;
     int k = 0;
 
-    int size = right - left + 1;
-    int temp[size];
+    size_t size = (size_t)(right - left + 1);
+    int *temp = malloc(size * sizeof(int));
 
-    while (i <= j && j <= right){
-        if (array[i] <= array[j]) temp[k] = array[i++];
-        else temp[k] = array[j++];
-        k++;
+    if (temp == NULL) {
+        perror("malloc failed in merge");
+        exit(EXIT_FAILURE);
+    }
+
+    while (i <= mid && j <= right){
+        if (array[i] <= array[j]) temp[k++] = array[i++];
+        else temp[k++] = array[j++];
     }
 
     while (i <= mid) {
@@ -133,7 +137,7 @@ void* simple_parallel_merge_sort(void * buffer)
     pthread_barrier_wait(&thread_pool_barrier);
 
     // Merge subarrays
-    for (int k = 2; k < args->array_size; k*=2){
+    for (int k = 2; k <= NB_THREADS; k*=2){
         if (args->id % k == 0){
             // we need to calculate the start and end
             // start is constant at least you only need differentiate if is the first or other
@@ -151,25 +155,23 @@ void* simple_parallel_merge_sort(void * buffer)
         pthread_barrier_wait(&thread_pool_barrier);
     }
 
+    return NULL;
+
 }
 int compute_rank(int array[],int target, int low, int high){
     // Repeat until the pointers low and high meet each other
     while (low <= high) {
         int mid = low + (high - low) / 2;
 
-        if (x == array[mid])
-            return mid;
-
-        if (x > array[mid])
+        if (target > array[mid])
             low = mid + 1;
-
         else
             high = mid - 1;
     }
 
-    return mid;
+    return low;
 }
-
+/*
 void* fully_parallel_merge_sort(void * buffer)
 {
     struct mergesort_thread *args = (struct mergesort_thread*) buffer;
@@ -235,6 +237,7 @@ void* fully_parallel_merge_sort(void * buffer)
     }
  
 }
+*/
 #endif
 void parallel_sort(int *array, int left, int right)
 {
