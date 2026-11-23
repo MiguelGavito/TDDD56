@@ -1,0 +1,202 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
+#include "merge_sort.h"
+#if NB_THREADS > 0
+#include <pthread.h>
+#endif
+
+#if NB_THREADS > 0
+pthread_barrier_t thread_pool_barrier;
+pthread_t thread[NB_THREADS];
+struct mergesort_thread thread_data[NB_THREADS];
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
+void sequential_merge_sort(int *array, int left, int right)
+{
+    if (left < right)
+    {
+        int mid = left + (right - left) / 2;
+
+        sequential_merge_sort(array, left, mid);
+        sequential_merge_sort(array, mid + 1, right);
+
+        // Merge the sorted halves
+        int n1 = mid - left + 1;
+        int n2 = right - mid;
+
+        int *L = (int *)malloc(n1 * sizeof(int));
+        int *R = (int *)malloc(n2 * sizeof(int));
+
+        for (int i = 0; i < n1; i++)
+            L[i] = array[left + i];
+        for (int j = 0; j < n2; j++)
+            R[j] = array[mid + 1 + j];
+
+        int i = 0, j = 0, k = left;
+        while (i < n1 && j < n2)
+        {
+            if (L[i] <= R[j])
+            {
+                array[k] = L[i];
+                i++;
+            }
+            else
+            {
+                array[k] = R[j];
+                j++;
+            }
+            k++;
+        }
+
+        while (i < n1)
+        {
+            array[k] = L[i];
+            i++;
+            k++;
+        }
+
+        while (j < n2)
+        {
+            array[k] = R[j];
+            j++;
+            k++;
+        }
+
+        free(L);
+        free(R);
+    }
+}
+
+void merge(int *array, int left, int mid, int right){
+    int i = left;
+    int j = mid+1;
+    int k = 0;
+
+    int size = right - left + 1;
+    int temp[size];
+
+    while (i <= j && j <= right){
+        if (array[i] <= array[j]) temp[k] = array[i++];
+        else temp[k] = array[j++];
+        k++;
+    }
+
+    while (i <= mid) {
+        temp[k++] = array[i++];
+    }
+    while (j <= right) {
+        temp[k++] = array[j++];
+    }
+    for (int p = 0; p < size; p++) {
+        array[left + p] = temp[p];
+    }
+    free(temp);
+
+}
+
+int partition_start(int partition, int array_size){
+    int base = array_size / NB_THREADS;
+    int remainder = array_size % NB_THREADS;
+
+    return partition * base + (partition < remainder ? partition : remainder);
+}
+
+void* simple_parallel_merge_sort(void * buffer)
+{
+	struct mergesort_thread *args = (struct mergesort_thread*) buffer;
+    // Get base and remainder
+    int base = args->array_size / NB_THREADS;
+    int remainder = args->array_size % NB_THREADS;
+
+    
+    int left = args->id * base;
+    // if id is lower than remainder we add id to left idx
+    // else we add remainder
+    // this account that we at the start have bigger sub sizes and are increment the place in the start, id 0 start at 0 but id 1 start at id * base +1 and id 2 at id * base +2, and after the id is equal or bigger than the remainder that mean we dont have more remainders and we only do left + remainder
+    left += (args->id < remainder) ? args->id : remainder;
+
+    // local size just check if the id is smaller than remainder, if it, then add 1
+    int local_size = base + (args->id < remainder);
+    int right = left + local_size - 1;
+
+
+    
+    sequential_merge_sort(args->array, left, right);
+
+    pthread_barrier_wait(&thread_pool_barrier);
+
+    // Merge subarrays
+    for (int k = 2; k < args->array_size; k*=2){
+        if (args->id % k == 0){
+            // we need to calculate the start and end
+            // start is constant at least you only need differentiate if is the first or other
+            // identify with the id the start
+            // we only need k for the dimension
+            int mid_partition = args->id + k / 2;
+            int end_partition = args->id + k;
+
+            int left = partition_start(args->id,args->array_size);
+            int mid = partition_start(mid_partition, args->array_size)-1;
+            int right = partition_start(end_partition, args->array_size)-1;
+
+            merge(args->array, left, mid, right);
+        }
+        pthread_barrier_wait(&thread_pool_barrier);
+    }
+
+}
+void* fully_parallel_merge_sort(void * buffer)
+{
+    struct mergesort_thread *args = (struct mergesort_thread*) buffer;
+    /*
+    * Add your code here
+    */
+}
+
+void parallel_sort(int *array, int left, int right)
+{
+#if NB_THREADS > 0
+    pthread_attr_t thread_attr;
+    int i;
+
+    // Initialize attributes
+    pthread_attr_init(&thread_attr);
+    pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
+
+    pthread_barrier_init(&thread_pool_barrier, NULL, NB_THREADS);
+    // Create a thread pool
+    for (i = 0; i < NB_THREADS; i++)
+    {
+        thread_data[i].id = i;
+        thread_data[i].array = array;
+        thread_data[i].array_size = right - left + 1;
+
+        /*
+        * Initialze other thread_data fields here
+        */
+#if ALGORITHM == 1
+        pthread_create(&thread[i], &thread_attr, &simple_parallel_merge_sort, &thread_data[i]);
+#endif
+#if ALGORITHM == 2
+        pthread_create(&thread[i], &thread_attr, &fully_parallel_merge_sort, &thread_data[i]);
+#endif
+    }
+    for (i = 0; i < NB_THREADS; i++)
+	{
+        pthread_join(thread[i], NULL);
+	}
+#else
+    printf("No threads available for parallel sort.\n");
+#endif
+}
+
+void sort_array(int *array, int size)
+{
+#if ALGORITHM == 0
+    sequential_merge_sort(array, 0, size - 1);
+#else
+    parallel_sort(array, 0, size - 1);
+#endif
+}
