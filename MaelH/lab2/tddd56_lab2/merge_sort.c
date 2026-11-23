@@ -171,7 +171,7 @@ void* simple_parallel_merge_sort(void * buffer)
     // Sequential merge sorting of subarray
     sequential_merge_sort(args->array, left, right);
 
-    
+
 
     // Wait for all subarrays to be sorted
     //printf("thread %d waiting at barrier\n", args->id);
@@ -204,12 +204,142 @@ void* simple_parallel_merge_sort(void * buffer)
 
 
 }
+/*
+ * ===================== Fully parallel merge sort =====================
+ *
+ * Following lecture 7 ("Fully Parallel Mergesort"):
+ *  - Phase 1: each thread sequentially sorts its own slice of the array.
+ *  - Phase 2: bottom-up iterative merging. At EVERY level, ALL threads
+ *    share the merging work: the output of every merge is split into
+ *    NB_THREADS contiguous segments, and each thread merges only the
+ *    part of each merge that falls inside its own segment.
+ *    The slice boundaries inside a merge are found by cross-ranking
+ *    (binary searches), cf. ParMerge in the lecture.
+ *  - Double buffering: level i reads from src and writes to dst, then
+ *    the buffers are swapped. This is necessary because the output
+ *    range of a merge equals its input range, so writing in place
+ *    would destroy elements that other threads still have to read.
+ */
+
+static int *fully_par_aux = NULL; /* auxiliary buffer, allocated once */
+
+/* Merge the sorted runs L = src[a0..a1] and R = src[b0..b1] into dst,
+ * but only write the output positions in [out_lo..out_hi].
+ * The split point of the slice is found with binary searches, so each
+ * thread only does O(slice length + log) work per merge. Ties are
+ * always resolved in favour of the left run (stable), which makes the
+ * split points computed independently by different threads consistent. */
+static void merge_slice(const int *src, int *dst,
+                        int a0, int a1, int b0, int b1,
+                        int out_lo, int out_hi)
+{
+    int lenL = a1 - a0 + 1;
+    int lenR = b1 - b0 + 1;
+    int o = out_lo - a0;        /* offset inside the merged output */
+
+    /* Smallest i such that taking i elements from L and o-i from R is a
+     * valid merge partition of the first o outputs:
+     *   i = number of left elements among the first o outputs. */
+    int lo_i = o - lenR; if (lo_i < 0) lo_i = 0;
+    int hi_i = (o < lenL) ? o : lenL;
+    while (lo_i < hi_i) {
+        int mid = (lo_i + hi_i) / 2;
+        int j = o - mid; /* > 0 here, and j < lenR since mid > o - lenR */
+        if (mid == lenL || src[b0 + j - 1] <= src[a0 + mid])
+            hi_i = mid;
+        else
+            lo_i = mid + 1;
+    }
+    int i0 = lo_i;
+    int j0 = o - i0;
+
+    /* Standard 2-to-1 merge of the slice, in O(slice) steps */
+    int i = i0, j = j0, pos = out_lo;
+    while (pos <= out_hi) {
+        int take_left;
+        if (i == lenL)      take_left = 0;
+        else if (j == lenR) take_left = 1;
+        else                take_left = (src[a0 + i] <= src[b0 + j]);
+        if (take_left)
+            dst[pos++] = src[a0 + i++];
+        else
+            dst[pos++] = src[b0 + j++];
+    }
+}
+
 void* fully_parallel_merge_sort(void * buffer)
 {
     struct mergesort_thread *args = (struct mergesort_thread*) buffer;
-    /*
-    * Add your code here
-    */
+    int n = args->array_size;
+    int p = NB_THREADS;
+
+    /* Initial run length = length of one thread's slice */
+    int w = (n + p - 1) / p;
+    if (w < 1) w = 1;
+
+    /* Thread 0 allocates the auxiliary buffer once; everyone waits */
+    if (args->id == 0 && fully_par_aux == NULL)
+        fully_par_aux = (int *)malloc(n * sizeof(int));
+    pthread_barrier_wait(&barrier);
+    if (fully_par_aux == NULL) return NULL; /* allocation failed: give up */
+
+    int *dst = fully_par_aux;
+    const int *src = args->array;
+
+    /* ---- Phase 1: each thread sequentially sorts its own slice ---- */
+    long int left = (long int)args->id * w;
+    long int right = left + w - 1;
+    if (right > n - 1) right = n - 1;
+    if (left <= right)
+        sequential_merge_sort(args->array, (int)left, (int)right);
+
+    pthread_barrier_wait(&barrier);
+
+    /* ---- Phase 2: iterative bottom-up merging, work at every level
+     * is shared by all NB_THREADS threads ---- */
+    while (w < n) {
+        /* Output segment handled by this thread at this level */
+        int lo_seg = (int)((long int)args->id * n / p);
+        int hi_seg = (int)((long int)(args->id + 1) * n / p) - 1;
+        if (hi_seg > n - 1) hi_seg = n - 1;
+
+        for (long int start = 0; start < (long int)n; start += 2 * (long int)w) {
+            int a0 = (int)start;
+            int b0 = (int)(start + w);
+            if (b0 > n - 1) break; /* lone final run, nothing to merge */
+            int a1 = b0 - 1;
+            int b1 = (int)(start + 2 * w) - 1;
+            if (b1 > n - 1) b1 = n - 1;
+
+            /* Part of this merge's output that falls in my segment */
+            int out_lo = (a0 > lo_seg) ? a0 : lo_seg;
+            int out_hi = (b1 < hi_seg) ? b1 : hi_seg;
+            if (out_lo > out_hi)
+                continue; /* this merge is handled entirely by others */
+
+            merge_slice(src, dst, a0, a1, b0, b1, out_lo, out_hi);
+        }
+
+        pthread_barrier_wait(&barrier);
+
+        /* Swap buffers: next level reads what was just written */
+        const int *tmp = src;
+        src = dst;
+        dst = (int *)tmp;
+
+        w *= 2;
+    }
+
+    /* If the final result ended up in the auxiliary buffer, copy it back */
+    if (src != args->array) {
+        int lo_seg = (int)((long int)args->id * n / p);
+        int hi_seg = (int)((long int)(args->id + 1) * n / p) - 1;
+        if (hi_seg > n - 1) hi_seg = n - 1;
+        for (int k = lo_seg; k <= hi_seg; k++)
+            args->array[k] = src[k];
+    }
+
+    return NULL;
 }
 #endif
 
