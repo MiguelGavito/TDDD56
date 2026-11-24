@@ -161,12 +161,12 @@ void* simple_parallel_merge_sort(void * buffer)
     return NULL;
 
 }
-int compute_rank(int array[],int target, int low, int high){
+int compute_rank(int array[],int target, int low, int high, int upper){
     // Repeat until the pointers low and high meet each other
     while (low <= high) {
         int mid = low + (high - low) / 2;
 
-        if (target > array[mid])
+        if (upper ? target >= array[mid] : target > array[mid])
             low = mid + 1;
         else
             high = mid - 1;
@@ -262,6 +262,10 @@ void* fully_parallel_merge_sort(void * buffer)
             // Aquí va el trabajo de este thread.
 
             for (int i = start; i < end; i++) {
+                // printf("DEBUG T%d | i=%d | n1=%d | condition=%d\n",
+                //     args->id, i, n1, i < n1);
+                // fflush(stdout);
+
                 if (i < n1) {
                     int value = args->array[a_start + i];
 
@@ -269,10 +273,11 @@ void* fully_parallel_merge_sort(void * buffer)
                         args->array,
                         value,
                         b_start,
-                        b_end - 1
+                        b_end - 1,
+                        0
                     );
                     int destination = a_start + i + (rank-b_start);
-                    printf("T%d | A | i=%d | value: %d | rank: %d | destination: %d\n", args->id, i, value, rank, destination);
+                    // printf("T%d | A | i=%d | value: %d | rank: %d | destination: %d\n", args->id, i, value, rank, destination);
                     shared_temp[destination] = value;
                 } else {
                     int j = i - n1;
@@ -281,18 +286,24 @@ void* fully_parallel_merge_sort(void * buffer)
                         args->array,
                         value,
                         a_start,
-                        a_end - 1
+                        a_end - 1,
+                        1
                     );
-                    int destination = b_start + j + (rank-a_start);
-                    printf("T%d | B | j=%d | value: %d | rank: %d | destination: %d\n", args->id, j, value, rank, destination);
+                    int destination = a_start + j + (rank-a_start);
+                    // printf("T%d | B | j=%d | value: %d | rank: %d | destination: %d\n", args->id, j, value, rank, destination);
                     shared_temp[destination] = value;
                 }
             }
-
+            // display *args->array@8
+            // display *shared_temp@8
         }
 
         pthread_barrier_wait(&thread_pool_barrier);
-
+        // printf("DEBUG T%d | k=%d | middle=%d | NB_THREADS=%d | "
+        //     "start=%d | end=%d | n1=%d | n2=%d\n",
+        //     args->id, k, middle_block, NB_THREADS,
+        //     start, end, n1, n2);
+        // fflush(stdout);
         if (middle_block < NB_THREADS) {
             int total = b_end - a_start;
 
