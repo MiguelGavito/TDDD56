@@ -288,40 +288,35 @@ void* fully_parallel_merge_sort(void * buffer)
         int end = start + count;
 
         // >>> 5. Merging
-        // 5.1 Each thread computes the rank of its elements and places them in the shared temporary array
         if (middle_block < NB_THREADS) {
-            for (int i = start; i < end; i++) {
-                // Determine if the element belongs to group A or group B
-                // If i is less than n1, it belongs to group A; otherwise, it belongs to group B
-                if (i < n1) {
-                    int value = args->array[a_start + i];
+            int *A = args->array + a_start;
+            int *B = args->array + b_start;
 
-                    int rank = compute_rank(
-                        args->array,
-                        value,
-                        b_start,
-                        b_end - 1,
-                        0 // upper = 0 means we want to find the first element that is greater than the value
-                    );
-                    int destination = a_start + i + (rank-b_start);
-                    shared_temp[destination] = value;
+            int  i_start, j_start;
+            int i_end, j_end;
+
+            co_rank(start, A, n1, B, n2, &i_start, &j_start);
+            co_rank(end, A, n1, B, n2, &i_end, &j_end);
+
+            int i = i_start;
+            int j = j_start;
+            int destination = a_start + start;
+
+            while (i < i_end && j < j_end) {
+                if (A[i] <= B[j]) {
+                    shared_temp[destination++] = A[i++];
                 } else {
-                    int j = i - n1;
-                    int value = args->array[b_start + j];
-                    int rank = compute_rank(
-                        args->array,
-                        value,
-                        a_start,
-                        a_end - 1,
-                        1   // upper = 1 means we want to find the first element that is greater than or equal to the value
-                    );
-                    int destination = a_start + j + (rank-a_start);
-                    shared_temp[destination] = value;
+                    shared_temp[destination++] = B[j++];
                 }
             }
-            // gdb command to display the array and shared_temp
-            // display *args->array@8
-            // display *shared_temp@8
+
+            while (i < i_end) {
+                shared_temp[destination++] = A[i++];
+            }
+
+            while (j < j_end) {
+                shared_temp[destination++] = B[j++];
+            }
         }
 
         // >>> 6. Synchronization before copying back to the original array
