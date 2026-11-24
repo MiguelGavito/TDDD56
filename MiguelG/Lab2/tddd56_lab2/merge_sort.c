@@ -12,8 +12,6 @@ pthread_t thread[NB_THREADS];
 struct mergesort_thread thread_data[NB_THREADS];
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int *shared_rank_a;
-int *shared_rank_b;
 int *shared_temp;
 
 #endif
@@ -268,17 +266,46 @@ void* fully_parallel_merge_sort(void * buffer)
 
             for (int i = start; i < end; i++) {
                 if (i < n1) {
-                    shared_rank_a[i] = compute_rank(args->array, args->array[a_start + i], b_start, b_end - 1);
+                    int value = args->array[a_start + i];
+
+                    int rank = compute_rank(
+                        args->array,
+                        value,
+                        b_start,
+                        b_end - 1
+                    );
+                    shared_temp[a_start + i + rank] = value;
                 } else {
-                    shared_rank_b[i - n1] = compute_rank(args->array, args->array[b_start + (i - n1)], a_start, a_end - 1);
+                    int j = i - n1;
+                    int value = args->array[b_start + j];
+                    int rank = compute_rank(
+                        args->array,
+                        value,
+                        a_start,
+                        a_end - 1
+                    );
+                    shared_temp[b_start + j + rank] = value;
                 }
             }
 
         }
 
         pthread_barrier_wait(&thread_pool_barrier);
-        for (int i = start; i < end; i++){
-            args->array[left + i] = (i < n1) ? args->array[a_start + i] : args->array[b_start + (i - n1)];
+
+        if (middle_block < NB_THREADS) {
+            int total = b_end - a_start;
+
+            int tasks_per_thread = total / workers;
+            int extra = total % workers;
+
+            int copy_start = local_id * tasks_per_thread
+                    + (local_id < extra ? local_id : extra);
+            int copy_count = tasks_per_thread + (local_id < extra);
+            int copy_end = copy_start + copy_count;
+
+            for (int i = copy_start; i < copy_end; i++) {
+                args->array[a_start + i] = shared_temp[a_start + i];
+            }
         }
 
         pthread_barrier_wait(&thread_pool_barrier);
@@ -312,16 +339,26 @@ void parallel_sort(int *array, int left, int right)
         pthread_create(&thread[i], &thread_attr, &simple_parallel_merge_sort, &thread_data[i]);
 #endif
 #if ALGORITHM == 2
+        shared_temp = malloc((right - left + 1) * sizeof(int));
+
+        if (shared_temp == NULL) {
+            perror("malloc failed in parallel_sort");
+            exit(EXIT_FAILURE);
+        }
         pthread_create(&thread[i], &thread_attr, &fully_parallel_merge_sort, &thread_data[i]);
 #endif
     }
     for (i = 0; i < NB_THREADS; i++)
 	{
         pthread_join(thread[i], NULL);
-        free(shared_rank_a);
-        free(shared_rank_b);
-        free(shared_temp);
 	}
+#if ALGORITHM == 2
+    free(shared_temp);
+    shared_temp = NULL;
+#endif
+    free(shared_rank_a);
+    free(shared_rank_b);
+    free(shared_temp);
 #else
     printf("No threads available for parallel sort.\n");
 #endif
