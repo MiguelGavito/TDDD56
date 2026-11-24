@@ -203,8 +203,6 @@ void* fully_parallel_merge_sort(void * buffer)
     // Merge process
 
     
-    shared_rank_a = malloc((right - left + 1) * sizeof(int));
-    shared_rank_b = malloc((right - left + 1) * sizeof(int));
     shared_temp = malloc((right - left + 1) * sizeof(int));
 
     // int temp[args->array_size]; // array termporal for save
@@ -356,9 +354,6 @@ void parallel_sort(int *array, int left, int right)
     free(shared_temp);
     shared_temp = NULL;
 #endif
-    free(shared_rank_a);
-    free(shared_rank_b);
-    free(shared_temp);
 #else
     printf("No threads available for parallel sort.\n");
 #endif
