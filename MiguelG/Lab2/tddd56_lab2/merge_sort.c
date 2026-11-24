@@ -179,6 +179,26 @@ int compute_rank(int array[],int target, int low, int high, int upper){
     return low;
 }
 
+void co_rank(int k, int *A, int m, int *B, int n, int *i_out, int *j_out) {
+    int low = (k > n) ? k - n : 0;
+    int high = (k < m) ? k : m;
+
+    while (low < high) {
+        int i = low + (high - low) / 2;
+        int j = k - i;
+
+        if (i > 0 && j < n && A[i - 1] > B[j]) {
+            high = i;
+        } else if (j > 0 && i < m && B[j - 1] >= A[i]) {
+            low = i + 1;
+        } else {
+            *i_out = i;
+            *j_out = j;
+            return;
+        }
+    }
+}
+
 void* fully_parallel_merge_sort(void * buffer)
 {
     // >>> 1. Thread initalization and partitioning
@@ -293,23 +313,20 @@ void* fully_parallel_merge_sort(void * buffer)
                         value,
                         a_start,
                         a_end - 1,
-                        1
+                        1   // upper = 1 means we want to find the first element that is greater than or equal to the value
                     );
                     int destination = a_start + j + (rank-a_start);
-                    // printf("T%d | B | j=%d | value: %d | rank: %d | destination: %d\n", args->id, j, value, rank, destination);
                     shared_temp[destination] = value;
                 }
             }
+            // gdb command to display the array and shared_temp
             // display *args->array@8
             // display *shared_temp@8
         }
 
+        // >>> 6. Synchronization before copying back to the original array
         pthread_barrier_wait(&thread_pool_barrier);
-        // printf("DEBUG T%d | k=%d | middle=%d | NB_THREADS=%d | "
-        //     "start=%d | end=%d | n1=%d | n2=%d\n",
-        //     args->id, k, middle_block, NB_THREADS,
-        //     start, end, n1, n2);
-        // fflush(stdout);
+        
         if (middle_block < NB_THREADS) {
             int total = b_end - a_start;
 
