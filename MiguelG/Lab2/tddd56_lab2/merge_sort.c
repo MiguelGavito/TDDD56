@@ -203,7 +203,6 @@ void* fully_parallel_merge_sort(void * buffer)
     // Merge process
 
     
-    shared_temp = malloc((right - left + 1) * sizeof(int));
 
     // int temp[args->array_size]; // array termporal for save
     // k is the number of blocks in the merge, first 2 block, then are 4 and then 8
@@ -272,7 +271,9 @@ void* fully_parallel_merge_sort(void * buffer)
                         b_start,
                         b_end - 1
                     );
-                    shared_temp[a_start + i + rank] = value;
+                    int destination = a_start + i + (rank-b_start);
+                    printf("T%d | A | i=%d | value: %d | rank: %d | destination: %d\n", args->id, i, value, rank, destination);
+                    shared_temp[destination] = value;
                 } else {
                     int j = i - n1;
                     int value = args->array[b_start + j];
@@ -282,7 +283,9 @@ void* fully_parallel_merge_sort(void * buffer)
                         a_start,
                         a_end - 1
                     );
-                    shared_temp[b_start + j + rank] = value;
+                    int destination = b_start + j + (rank-a_start);
+                    printf("T%d | B | j=%d | value: %d | rank: %d | destination: %d\n", args->id, j, value, rank, destination);
+                    shared_temp[destination] = value;
                 }
             }
 
@@ -323,7 +326,18 @@ void parallel_sort(int *array, int left, int right)
     pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
 
     pthread_barrier_init(&thread_pool_barrier, NULL, NB_THREADS);
-    // Create a thread pool
+
+#if ALGORITHM == 2
+    // Allocate shared memory ONCE, before creating threads
+    shared_temp = malloc((right - left + 1) * sizeof(int));
+
+    if (shared_temp == NULL) {
+        perror("malloc failed in parallel_sort");
+        exit(EXIT_FAILURE);
+    }
+#endif
+
+    // Create threads
     for (i = 0; i < NB_THREADS; i++)
     {
         thread_data[i].id = i;
@@ -331,29 +345,34 @@ void parallel_sort(int *array, int left, int right)
         thread_data[i].array_size = right - left + 1;
 
         /*
-        * Initialze other thread_data fields here
-        */
-#if ALGORITHM == 1
-        pthread_create(&thread[i], &thread_attr, &simple_parallel_merge_sort, &thread_data[i]);
-#endif
-#if ALGORITHM == 2
-        shared_temp = malloc((right - left + 1) * sizeof(int));
+         * Initialize other thread_data fields here
+         */
 
-        if (shared_temp == NULL) {
-            perror("malloc failed in parallel_sort");
-            exit(EXIT_FAILURE);
-        }
-        pthread_create(&thread[i], &thread_attr, &fully_parallel_merge_sort, &thread_data[i]);
+#if ALGORITHM == 1
+        pthread_create(&thread[i], &thread_attr,
+                       &simple_parallel_merge_sort, &thread_data[i]);
+#endif
+
+#if ALGORITHM == 2
+        pthread_create(&thread[i], &thread_attr,
+                       &fully_parallel_merge_sort, &thread_data[i]);
 #endif
     }
+
+    // WAIT for all threads to finish
     for (i = 0; i < NB_THREADS; i++)
-	{
+    {
         pthread_join(thread[i], NULL);
-	}
+    }
+
 #if ALGORITHM == 2
     free(shared_temp);
     shared_temp = NULL;
 #endif
+
+    pthread_barrier_destroy(&thread_pool_barrier);
+    pthread_attr_destroy(&thread_attr);
+
 #else
     printf("No threads available for parallel sort.\n");
 #endif
