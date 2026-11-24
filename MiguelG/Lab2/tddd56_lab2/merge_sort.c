@@ -171,10 +171,15 @@ int compute_rank(int array[],int target, int low, int high){
 
     return low;
 }
-/*
+
 void* fully_parallel_merge_sort(void * buffer)
 {
     struct mergesort_thread *args = (struct mergesort_thread*) buffer;
+
+    int *rank_a_in_b;
+    int *rank_b_in_a;
+    int *temp;
+
     // Get base and remainder
     int base = args->array_size / NB_THREADS;
     int remainder = args->array_size % NB_THREADS;
@@ -190,7 +195,12 @@ void* fully_parallel_merge_sort(void * buffer)
     int local_size = base + (args->id < remainder);
     int right = left + local_size - 1;
 
-    // define a method in order to do id 0 check area id 1 and vice versa, and then expand
+    sequential_merge_sort(args->array, left, right);
+
+
+    pthread_barrier_wait(&thread_pool_barrier);
+
+    // New Part
     int mid_partition = args->id + k / 2;
     int end_partition = args->id + k;
 
@@ -199,45 +209,62 @@ void* fully_parallel_merge_sort(void * buffer)
     int right = partition_start(end_partition, args->array_size)-1;
 
     int temp[] // array termporal for save
-    
-    sequential_merge_sort(args->array, left, right);
-
-
-    pthread_barrier_wait(&thread_pool_barrier);
-
+    // k is the number of blocks in the merge, first 2 block, then are 4 and then 8
     for (int k = 2; k <= NB_THREADS; k*=2){
-        int rank_a_in_b[n1];
-        int rank_b_in_a[n2];
-        // if even work with array a 
-        if (args->id % 2 == 0){
-            for (int i = 0; i < n1; i++){
-                rank_a_in_b[i] = compute_rank(args->array,args->array[i],left,mid);
-            }
+        int merge_id = args->id / k;
+        int local_id = args->id % k;
+        // 0 1 2 3 4 5 6 7  idx
+        // 0 0 1 1 2 2 3 3  merge_id
+        // 0 1 0 1 0 1 0 1  local_id
+        // 0 1 2 3 0 1 2 3
+
+        // 0 1 2 3 4 5 idx 6 threads
+        // 0 0 1 1 2 2
+        // 0 0 0 0 1 1
+
+        // 0 1 0 1 0 1
+        // 0 1 2 3 1 2
+        
+        int first_block = merge_id * k;
+        int middle_block = first_block + k / 2;
+        int last_block = first_block + k;
+        if (last_block > NB_THREADS)
+            last_block = NB_THREADS;
+
+        if (middle_block < NB_THREADS) {
+            int a_start = partition_start(first_block, args->array_size);
+            int a_end   = partition_start(middle_block, args->array_size);
+
+            int b_start = a_end;
+            int b_end   = partition_start(last_block, args->array_size);
+
+            int n1 = a_end - a_start;
+            int n2 = b_end - b_start;
+            int total = n1 + n2;
+
+            int workers = last_block - first_block;
+            int local_id = args->id - first_block;
+
+            int tasks_per_thread = total / workers;
+            int extra = total % workers;
+
+            int start = local_id * tasks_per_thread
+                    + (local_id < extra ? local_id : extra);
+
+            int count = tasks_per_thread + (local_id < extra);
+            int end = start + count;
+
+            // Aquí va el trabajo de este thread.
+
         }
-        else{
-            for (int j = 0; j < n2; j++){
-                rank_b_in_a[j] = compute_rank(args->array,args->array[j+mid],mid,right);
-            }
-        }
-        // if odd work with array b
 
         pthread_barrier_wait(&thread_pool_barrier);
 
-        if (args->id % 2 == 0){
-            for (int i = 0; i < n1; i++){
-
-            }
-        }
-        else{
-            for (int j = 0; j < n2; j++){
-
-            }
-        }
         pthread_barrier_wait(&thread_pool_barrier);
     }
  
 }
-*/
+
 #endif
 void parallel_sort(int *array, int left, int right)
 {
