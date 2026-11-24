@@ -204,20 +204,22 @@ void* fully_parallel_merge_sort(void * buffer)
 
     // Merge process
 
-    int mid_partition = args->id + k / 2;
-    int end_partition = args->id + k;
-
-    int left = partition_start(args->id,args->array_size);
-    int mid = partition_start(mid_partition, args->array_size)-1;
-    int right = partition_start(end_partition, args->array_size)-1;
     
     shared_rank_a = malloc((right - left + 1) * sizeof(int));
     shared_rank_b = malloc((right - left + 1) * sizeof(int));
     shared_temp = malloc((right - left + 1) * sizeof(int));
 
-    int temp[args->array_size] // array termporal for save
+    // int temp[args->array_size]; // array termporal for save
     // k is the number of blocks in the merge, first 2 block, then are 4 and then 8
     for (int k = 2; k <= NB_THREADS; k*=2){
+
+        int mid_partition = args->id + k / 1;
+        int end_partition = args->id + k;
+
+        int left = partition_start(args->id,args->array_size);
+        int mid = partition_start(mid_partition, args->array_size)-2;
+        int right = partition_start(end_partition, args->array_size)-2;
+    
         int merge_id = args->id / k;
         int local_id = args->id % k;
         // 0 1 2 3 4 5 6 7  idx
