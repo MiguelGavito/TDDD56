@@ -126,7 +126,9 @@ void* simple_parallel_merge_sort(void * buffer)
     int left = args->id * base;
     // if id is lower than remainder we add id to left idx
     // else we add remainder
-    // this account that we at the start have bigger sub sizes and are increment the place in the start, id 0 start at 0 but id 1 start at id * base +1 and id 2 at id * base +2, and after the id is equal or bigger than the remainder that mean we dont have more remainders and we only do left + remainder
+    // this account that we at the start have bigger sub sizes and are increment the place in the start, 
+    // id 0 start at 0 but id 1 start at id * base +1 and id 2 at id * base +2, 
+    // and after the id is equal or bigger than the remainder that mean we dont have more remainders and we only do left + remainder
     left += (args->id < remainder) ? args->id : remainder;
 
     // local size just check if the id is smaller than remainder, if it, then add 1
@@ -161,6 +163,8 @@ void* simple_parallel_merge_sort(void * buffer)
     return NULL;
 
 }
+// Binary search to find the rank of the target in the array 
+// upper = 1 means we want to find the first element that is greater than or equal to the target
 int compute_rank(int array[],int target, int low, int high, int upper){
     // Repeat until the pointers low and high meet each other
     while (low <= high) {
@@ -177,95 +181,98 @@ int compute_rank(int array[],int target, int low, int high, int upper){
 
 void* fully_parallel_merge_sort(void * buffer)
 {
+    // >>> 1. Thread initalization and partitioning
     struct mergesort_thread *args = (struct mergesort_thread*) buffer;
 
     // Get base and remainder
     int base = args->array_size / NB_THREADS;
     int remainder = args->array_size % NB_THREADS;
 
-    
     int left = args->id * base;
     // if id is lower than remainder we add id to left idx
     // else we add remainder
-    // this account that we at the start have bigger sub sizes and are increment the place in the start, id 0 start at 0 but id 1 start at id * base +1 and id 2 at id * base +2, and after the id is equal or bigger than the remainder that mean we dont have more remainders and we only do left + remainder
+    // this account that we at the start have bigger sub sizes and are increment the place in the start, 
+    // id 0 start at 0 but id 1 start at id * base +1 and id 2 at id * base +2, 
+    //and after the id is equal or bigger than the remainder that mean we dont have more remainders and we only do left + remainder
     left += (args->id < remainder) ? args->id : remainder;
 
     // local size just check if the id is smaller than remainder, if it, then add 1
     int local_size = base + (args->id < remainder);
     int right = left + local_size - 1;
+    // <<< Thread initalization and partitioning
 
+    // >>> 2. Local sorting
     if (left <= right)
         sequential_merge_sort(args->array, left, right);
+    // <<< Local sorting
 
-
+    // >>> 3. Synchronization before merging
     pthread_barrier_wait(&thread_pool_barrier);
+    // << Synchronization before merging
 
-    // Merge process
 
-    
+    // >>> 4. Merge group configuration and workload distribution
 
-    // int temp[args->array_size]; // array termporal for save
     // k is the number of blocks in the merge, first 2 block, then are 4 and then 8
-    for (int k = 2; k <= NB_THREADS; k*=2){
+    for (int k = 2; k < 2 * NB_THREADS; k*=2){
 
-        // int mid_partition = args->id + k / 1;
-        // int end_partition = args->id + k;
-
-        // int left = partition_start(args->id,args->array_size);
-        // int mid = partition_start(mid_partition, args->array_size)-2;
-        // int right = partition_start(end_partition, args->array_size)-2;
-     
+        // >>> 4.1 group identification
         int merge_id = args->id / k; 
         int local_id = args->id % k;
-        // 0 1 2 3 4 5 6 7  idx
-        // 0 0 1 1 2 2 3 3  merge_id
-        // 0 1 0 1 0 1 0 1  local_id
-        // 0 1 2 3 0 1 2 3
+        // 0 1 2 3 4 5 6 7  idx 8 threads
+        // 0 0 1 1 2 2 3 3  merge_id k=2
+        // 0 1 0 1 0 1 0 1  local_id k=2
+        // 0 1 2 3 0 1 2 3  local_id k=4
 
-        // 0 1 2 3 4 5 idx 6 threads
-        // 0 0 1 1 2 2
-        // 0 0 0 0 1 1
+        // 0 1 2 3 4 5  idx 6 threads
+        // 0 0 1 1 2 2  merge_id k=2
+        // 0 0 0 0 1 1  merge_id k=4
 
-        // 0 1 0 1 0 1
-        // 0 1 2 3 1 2
+        // 0 1 0 1 0 1  local_id k=2
+        // 0 1 2 3 1 2  local_id k=4
         
+        // we calculate the first, middle and last block of the merge group, 
+        // and then we calculate the start and end of each block in the array
         int first_block = merge_id * k;
         int middle_block = first_block + k / 2;
         int last_block = first_block + k;
 
+        // if the last block is bigger than the number of threads, we set it to the number of threads
         if (last_block > NB_THREADS)
             last_block = NB_THREADS;
+        
+        
+        // group a is from first_block to middle_block, group b is from middle_block to last_block
         int a_start = partition_start(first_block, args->array_size);
         int a_end   = partition_start(middle_block, args->array_size);
 
         int b_start = a_end;
         int b_end   = partition_start(last_block, args->array_size);
 
+        //  calculate the sizes of the two groups
         int n1 = a_end - a_start;
         int n2 = b_end - b_start;
         int total = n1 + n2;
 
+        /// >>> 4.2 Workload distribution
         int workers = last_block - first_block;
         local_id = args->id - first_block;
 
         int tasks_per_thread = total / workers;
         int extra = total % workers;
 
-        int start = local_id * tasks_per_thread
-                + (local_id < extra ? local_id : extra);
-
+        // calculate the start and end of the tasks for this thread
+        //      (same trick as before, if the local_id is smaller than the extra, we add 1 to the start)
+        int start = local_id * tasks_per_thread + (local_id < extra ? local_id : extra);
         int count = tasks_per_thread + (local_id < extra);
         int end = start + count;
+
+        // >>> 5. Merging
+        // 5.1 Each thread computes the rank of its elements and places them in the shared temporary array
         if (middle_block < NB_THREADS) {
-
-
-            // Aquí va el trabajo de este thread.
-
             for (int i = start; i < end; i++) {
-                // printf("DEBUG T%d | i=%d | n1=%d | condition=%d\n",
-                //     args->id, i, n1, i < n1);
-                // fflush(stdout);
-
+                // Determine if the element belongs to group A or group B
+                // If i is less than n1, it belongs to group A; otherwise, it belongs to group B
                 if (i < n1) {
                     int value = args->array[a_start + i];
 
@@ -274,10 +281,9 @@ void* fully_parallel_merge_sort(void * buffer)
                         value,
                         b_start,
                         b_end - 1,
-                        0
+                        0 // upper = 0 means we want to find the first element that is greater than the value
                     );
                     int destination = a_start + i + (rank-b_start);
-                    // printf("T%d | A | i=%d | value: %d | rank: %d | destination: %d\n", args->id, i, value, rank, destination);
                     shared_temp[destination] = value;
                 } else {
                     int j = i - n1;
@@ -341,6 +347,7 @@ void parallel_sort(int *array, int left, int right)
 #if ALGORITHM == 2
     // Allocate shared memory ONCE, before creating threads
     shared_temp = malloc((right - left + 1) * sizeof(int));
+    
 
     if (shared_temp == NULL) {
         perror("malloc failed in parallel_sort");
