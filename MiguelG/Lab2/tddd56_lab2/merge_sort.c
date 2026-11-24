@@ -11,6 +11,11 @@ pthread_barrier_t thread_pool_barrier;
 pthread_t thread[NB_THREADS];
 struct mergesort_thread thread_data[NB_THREADS];
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int *shared_rank_a;
+int *shared_rank_b;
+int *shared_temp;
+
 #endif
 
 void sequential_merge_sort(int *array, int left, int right)
@@ -176,10 +181,6 @@ void* fully_parallel_merge_sort(void * buffer)
 {
     struct mergesort_thread *args = (struct mergesort_thread*) buffer;
 
-    int *rank_a_in_b;
-    int *rank_b_in_a;
-    int *temp;
-
     // Get base and remainder
     int base = args->array_size / NB_THREADS;
     int remainder = args->array_size % NB_THREADS;
@@ -195,18 +196,24 @@ void* fully_parallel_merge_sort(void * buffer)
     int local_size = base + (args->id < remainder);
     int right = left + local_size - 1;
 
-    sequential_merge_sort(args->array, left, right);
+    if (left <= right)
+        sequential_merge_sort(args->array, left, right);
 
 
     pthread_barrier_wait(&thread_pool_barrier);
 
-    // New Part
+    // Merge process
+
     int mid_partition = args->id + k / 2;
     int end_partition = args->id + k;
 
     int left = partition_start(args->id,args->array_size);
     int mid = partition_start(mid_partition, args->array_size)-1;
     int right = partition_start(end_partition, args->array_size)-1;
+    
+    shared_rank_a = malloc((right - left + 1) * sizeof(int));
+    shared_rank_b = malloc((right - left + 1) * sizeof(int));
+    shared_temp = malloc((right - left + 1) * sizeof(int));
 
     int temp[args->array_size] // array termporal for save
     // k is the number of blocks in the merge, first 2 block, then are 4 and then 8
@@ -228,6 +235,7 @@ void* fully_parallel_merge_sort(void * buffer)
         int first_block = merge_id * k;
         int middle_block = first_block + k / 2;
         int last_block = first_block + k;
+
         if (last_block > NB_THREADS)
             last_block = NB_THREADS;
 
@@ -262,7 +270,7 @@ void* fully_parallel_merge_sort(void * buffer)
 
         pthread_barrier_wait(&thread_pool_barrier);
     }
- 
+    return NULL;
 }
 
 #endif
@@ -297,6 +305,9 @@ void parallel_sort(int *array, int left, int right)
     for (i = 0; i < NB_THREADS; i++)
 	{
         pthread_join(thread[i], NULL);
+        free(shared_rank_a);
+        free(shared_rank_b);
+        free(shared_temp);
 	}
 #else
     printf("No threads available for parallel sort.\n");
