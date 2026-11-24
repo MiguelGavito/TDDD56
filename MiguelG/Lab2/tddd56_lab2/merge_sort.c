@@ -213,14 +213,14 @@ void* fully_parallel_merge_sort(void * buffer)
     // k is the number of blocks in the merge, first 2 block, then are 4 and then 8
     for (int k = 2; k <= NB_THREADS; k*=2){
 
-        int mid_partition = args->id + k / 1;
-        int end_partition = args->id + k;
+        // int mid_partition = args->id + k / 1;
+        // int end_partition = args->id + k;
 
-        int left = partition_start(args->id,args->array_size);
-        int mid = partition_start(mid_partition, args->array_size)-2;
-        int right = partition_start(end_partition, args->array_size)-2;
-    
-        int merge_id = args->id / k;
+        // int left = partition_start(args->id,args->array_size);
+        // int mid = partition_start(mid_partition, args->array_size)-2;
+        // int right = partition_start(end_partition, args->array_size)-2;
+     
+        int merge_id = args->id / k; 
         int local_id = args->id % k;
         // 0 1 2 3 4 5 6 7  idx
         // 0 0 1 1 2 2 3 3  merge_id
@@ -240,35 +240,46 @@ void* fully_parallel_merge_sort(void * buffer)
 
         if (last_block > NB_THREADS)
             last_block = NB_THREADS;
+        int a_start = partition_start(first_block, args->array_size);
+        int a_end   = partition_start(middle_block, args->array_size);
 
+        int b_start = a_end;
+        int b_end   = partition_start(last_block, args->array_size);
+
+        int n1 = a_end - a_start;
+        int n2 = b_end - b_start;
+        int total = n1 + n2;
+
+        int workers = last_block - first_block;
+        local_id = args->id - first_block;
+
+        int tasks_per_thread = total / workers;
+        int extra = total % workers;
+
+        int start = local_id * tasks_per_thread
+                + (local_id < extra ? local_id : extra);
+
+        int count = tasks_per_thread + (local_id < extra);
+        int end = start + count;
         if (middle_block < NB_THREADS) {
-            int a_start = partition_start(first_block, args->array_size);
-            int a_end   = partition_start(middle_block, args->array_size);
 
-            int b_start = a_end;
-            int b_end   = partition_start(last_block, args->array_size);
-
-            int n1 = a_end - a_start;
-            int n2 = b_end - b_start;
-            int total = n1 + n2;
-
-            int workers = last_block - first_block;
-            int local_id = args->id - first_block;
-
-            int tasks_per_thread = total / workers;
-            int extra = total % workers;
-
-            int start = local_id * tasks_per_thread
-                    + (local_id < extra ? local_id : extra);
-
-            int count = tasks_per_thread + (local_id < extra);
-            int end = start + count;
 
             // Aquí va el trabajo de este thread.
+
+            for (int i = start; i < end; i++) {
+                if (i < n1) {
+                    shared_rank_a[i] = compute_rank(args->array, args->array[a_start + i], b_start, b_end - 1);
+                } else {
+                    shared_rank_b[i - n1] = compute_rank(args->array, args->array[b_start + (i - n1)], a_start, a_end - 1);
+                }
+            }
 
         }
 
         pthread_barrier_wait(&thread_pool_barrier);
+        for (int i = start; i < end; i++){
+            args->array[left + i] = (i < n1) ? args->array[a_start + i] : args->array[b_start + (i - n1)];
+        }
 
         pthread_barrier_wait(&thread_pool_barrier);
     }
