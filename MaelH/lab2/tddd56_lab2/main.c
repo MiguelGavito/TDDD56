@@ -80,7 +80,7 @@ int main(int argc, char **argv)
         array[i] = rand() % (10 * size);
         //printf("%d\n",array[i]);
     }
-    printf("\ndivision\n");
+    //printf("\ndivision\n");
 #ifdef MEASURE
     struct mergesort_timing global;
     clock_gettime(CLOCK_MONOTONIC, &global.start);
