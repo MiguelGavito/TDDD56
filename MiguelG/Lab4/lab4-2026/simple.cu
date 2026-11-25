@@ -13,15 +13,19 @@ __global__
 void simple(float *c, float * f) 
 {
 	c[threadIdx.x] = threadIdx.x;
-	*f += 1;
-	
+	// *f = *f + 1;
+	atomicAdd(f,1);
 }
+
 int main()
 {
 	float *input;
-	float *f;
+	float f = 0;
+	//float *pzero;
+	//*pzero = 0;
+	
 	cudaMalloc( (void**)&input, sizeof(float));
-	*input = 0;
+	//cudaMemcpy( input, pzero, sizeof(float), cudaMemcpyHostToDevice);
 
 	float *c = new float[N];	
 	float *cd;
@@ -31,16 +35,18 @@ int main()
 	dim3 dimBlock( blocksize, 1 );
 	dim3 dimGrid( 1, 1 );
 	simple<<<dimGrid, dimBlock>>>(cd, input);
+	
 	cudaDeviceSynchronize();
 	cudaMemcpy( c, cd, size, cudaMemcpyDeviceToHost ); 
-	cudaMemcpy(f, input, sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(&f, input, sizeof(float), cudaMemcpyDeviceToHost);
+	//printf("%f\n", f);
 	cudaFree( cd );
 	cudaFree(input);
 	
 	for (int i = 0; i < N; i++)
 		printf("%f ", c[i]);
 	printf("\n");
-	printf("%f", *f);
+	printf("%f\n", f);
 
 	delete[] c;
 	printf("done\n");
