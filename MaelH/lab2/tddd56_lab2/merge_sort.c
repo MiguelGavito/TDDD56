@@ -196,12 +196,8 @@ void* simple_parallel_merge_sort(void * buffer)
             sub_size = sub_size*2;
         }
         
-
-        
         pthread_barrier_wait(&barrier);
     }
-
-
 
 }
 
@@ -216,9 +212,6 @@ static void merge_slice(const int *src, int *dst,
     int lenR = b1 - b0 + 1;
     int o = out_lo - a0;        /* offset inside the merged output */
 
-    /* Smallest i such that taking i elements from L and o-i from R is a
-     * valid merge partition of the first o outputs:
-     *   i = number of left elements among the first o outputs. */
     int lo_i = o - lenR; if (lo_i < 0) lo_i = 0;
     int hi_i = (o < lenL) ? o : lenL;
     while (lo_i < hi_i) {
@@ -232,17 +225,14 @@ static void merge_slice(const int *src, int *dst,
     int i0 = lo_i;
     int j0 = o - i0;
 
-    /* Standard 2-to-1 merge of the slice, in O(slice) steps */
     int i = i0, j = j0, pos = out_lo;
     while (pos <= out_hi) {
         int take_left;
-        if (i == lenL)      take_left = 0;
+        if (i == lenL) take_left = 0;
         else if (j == lenR) take_left = 1;
-        else                take_left = (src[a0 + i] <= src[b0 + j]);
-        if (take_left)
-            dst[pos++] = src[a0 + i++];
-        else
-            dst[pos++] = src[b0 + j++];
+        else take_left = (src[a0 + i] <= src[b0 + j]);
+        if (take_left) dst[pos++] = src[a0 + i++];
+        else dst[pos++] = src[b0 + j++];
     }
 }
 
