@@ -12,7 +12,7 @@ void add_matrix(float *a, float *b, float *c, int N)
 		{
 			index = i + j*N;
 			c[index] = a[index] + b[index];
-		}
+		} 
 }
 
 int main()
