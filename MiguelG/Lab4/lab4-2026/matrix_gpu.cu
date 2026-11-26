@@ -46,7 +46,7 @@ int main()
 	
     add_matrix<<<dimGrid, dimBlock>>>(ga,gb,gc,N);
 
-	cudaMemcpy(&c, gc, N*N*sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(c, gc, N*N*sizeof(float), cudaMemcpyDeviceToHost);
 	cudaFree(gc);
 
     for (int i = 0; i < N; i++)
